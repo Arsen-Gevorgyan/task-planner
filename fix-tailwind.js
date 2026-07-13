@@ -1,4 +1,8 @@
-@import "tailwindcss";
+const fs = require('fs');
+const path = require('path');
+
+// Update globals.css for Tailwind v4
+const cssContent = `@import "tailwindcss";
 
 @theme {
   --color-border: hsl(217.2 32.6% 17.5%);
@@ -31,3 +35,15 @@ body {
   background-color: var(--color-background);
   color: var(--color-foreground);
 }
+`;
+
+fs.writeFileSync(path.join(__dirname, 'src', 'app', 'globals.css'), cssContent, 'utf8');
+console.log('✓ Updated globals.css for Tailwind v4');
+
+// Update layout.tsx to remove the "dark" class since we're always dark
+const layoutPath = path.join(__dirname, 'src', 'app', 'layout.tsx');
+let layoutContent = fs.readFileSync(layoutPath, 'utf8');
+// We'll keep the dark class for now, but note that in v4 we handle this differently
+
+console.log('\n✅ Fix applied!');
+console.log('Now run: npm run dev');

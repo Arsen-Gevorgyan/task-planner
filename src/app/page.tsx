@@ -1,65 +1,165 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import React, { useEffect, useState, useCallback } from 'react'
+import { useTaskStore } from '@/stores/task.store'
+import { useUIStore } from '@/stores/ui.store'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Plus, Search } from 'lucide-react'
+import { GlobalTaskCard } from '@/components/tasks/GlobalTaskCard'
+import { GlobalTaskDialog } from '@/components/dialogs/GlobalTaskDialog'
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog'
+import type { GlobalTask } from '@/types/models'
+import { DialogType } from '@/types/enums'
+
+export default function GlobalTasksPage() {
+  const { 
+    globalTasks, 
+    loading, 
+    loadGlobalTasks, 
+    createGlobalTask,
+    updateGlobalTask,
+    deleteGlobalTask 
+  } = useTaskStore()
+  
+  const { 
+    activeDialog, 
+    dialogData, 
+    setActiveDialog, 
+    closeDialog,
+    searchQuery,
+    setSearchQuery 
+  } = useUIStore()
+
+  const [selectedTask, setSelectedTask] = useState<GlobalTask | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+
+  useEffect(() => {
+    loadGlobalTasks()
+  }, [loadGlobalTasks])
+
+  const handleCreateTask = useCallback(() => {
+    setSelectedTask(null)
+    setIsEditDialogOpen(true)
+  }, [])
+
+  const handleEditTask = useCallback((task: GlobalTask) => {
+    setSelectedTask(task)
+    setIsEditDialogOpen(true)
+  }, [])
+
+  const handleDeleteTask = useCallback((task: GlobalTask) => {
+    setActiveDialog(DialogType.CONFIRM_DELETE_GLOBAL, {
+      title: 'Delete Task',
+      message: 'This task is used in your planner. Deleting it will also remove every scheduled instance. Continue?',
+      taskId: task.id,
+      onConfirm: async () => {
+        await deleteGlobalTask(task.id!)
+        closeDialog()
+      },
+      onCancel: () => closeDialog(),
+    })
+  }, [deleteGlobalTask, setActiveDialog, closeDialog])
+
+  const handleSaveTask = useCallback(async (taskData: Partial<GlobalTask>) => {
+    if (selectedTask) {
+      await updateGlobalTask(selectedTask.id!, taskData)
+    } else {
+      await createGlobalTask(taskData as Omit<GlobalTask, 'id' | 'createdAt' | 'updatedAt'>)
+    }
+    setIsEditDialogOpen(false)
+    setSelectedTask(null)
+  }, [selectedTask, updateGlobalTask, createGlobalTask])
+
+  const filteredTasks = globalTasks.filter(task =>
+    task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    task.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault()
+        handleCreateTask()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleCreateTask])
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Global Tasks</h1>
+          <p className="text-muted-foreground mt-2">Manage your reusable task templates</p>
+        </div>
+        <Button onClick={handleCreateTask} size="lg">
+          <Plus className="h-5 w-5 mr-2" />
+          New Task
+        </Button>
+      </div>
+
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search tasks..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+          <p className="mt-4 text-muted-foreground">Loading tasks...</p>
+        </div>
+      ) : filteredTasks.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-lg text-muted-foreground">
+            {searchQuery ? 'No tasks match your search' : 'No global tasks yet'}
           </p>
+          {!searchQuery && (
+            <Button onClick={handleCreateTask} variant="outline" className="mt-4">
+              Create your first task
+            </Button>
+          )}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      ) : (
+        <div className="space-y-3">
+          {filteredTasks.map(task => (
+            <GlobalTaskCard
+              key={task.id}
+              task={task}
+              onEdit={handleEditTask}
+              onDelete={handleDeleteTask}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          ))}
         </div>
-      </main>
+      )}
+
+      <GlobalTaskDialog
+        open={isEditDialogOpen}
+        onClose={() => {
+          setIsEditDialogOpen(false)
+          setSelectedTask(null)
+        }}
+        onSave={handleSaveTask}
+        task={selectedTask}
+      />
+
+      {activeDialog === DialogType.CONFIRM_DELETE_GLOBAL && dialogData && (
+        <ConfirmDialog
+          open={true}
+          title={dialogData.title}
+          message={dialogData.message}
+          onConfirm={dialogData.onConfirm || (() => {})}
+          onCancel={dialogData.onCancel || (() => {})}
+          variant="destructive"
+        />
+      )}
     </div>
-  );
+  )
 }
